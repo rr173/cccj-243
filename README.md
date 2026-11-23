@@ -226,6 +226,104 @@ Behaviour guarantees:
   Reopening rebuilds the indexes from the *current* selection once; it does not
   replay history.  Only a single writer is supported.
 
+## Multi-batch merge (one combined test warehouse)
+
+Several teams can each produce a verified fixture for the *same* contract and
+load them together once.  Naive concatenation collides on rule keys and can
+attach child rows to another batch's parents; `fixturegen.merge` combines the
+fixtures without touching the target schema — no batch column, no dropped
+rows, no changed amounts.
+
+Inputs are one contract, at least two `fixture/1` documents (normal or
+single-rule isolations) with distinct batch ids, and a rewrite whitelist:
+
+```json
+{"schema": "rewrite-whitelist/1",
+ "fields": [{"table": "SETTLEMENT", "field": "settle_code"}]}
+```
+
+Every fixture is independently re-verified before use; the merged rows come
+from the contract candidates that verification matched, never from the
+fixture's self-reported rule table.  Only **string-typed columns that
+participate in a rule key** may be whitelisted; integers, explicit nulls,
+absent fields and all other columns are reproduced verbatim.
+
+```bash
+python3 -m fixturegen.merge_cli build examples/merge-demo/contract.json \
+  --whitelist examples/merge-demo/whitelist-success.json \
+  --batch B1=examples/merge-demo/batch-B1.fixture.json \
+  --batch B2=examples/merge-demo/batch-B2.fixture.json \
+  --out examples/merge-demo/merged-pack.json
+python3 -m fixturegen.merge_cli verify examples/merge-demo/contract.json \
+  examples/merge-demo/merged-pack.json
+```
+
+### Identity domains and the rewrite discipline
+
+Rule-key columns form **identity domains**: two columns are in the same
+domain when a rule compares them at the same composite-key position, or when
+they are linked transitively through other rules (a uniqueness-only column is
+a domain of its own).  The pack lists every domain and its columns.
+
+Within one batch and one domain, rewriting is injective: the same original
+string is replaced identically everywhere (so a detail field connected to
+both a settlement code and a report code cannot drift apart), and distinct
+originals stay distinct.  An original string that also occurs in a
+**non-whitelisted** column of the same batch/domain is *locked*: it is kept
+verbatim everywhere in that batch/domain.  Locking one value never locks the
+domain's other values.  Every non-locked value receives a replacement that is
+globally unique across the pack and disjoint from every original fixture
+string; the minting loop simply draws another identifier when one is taken,
+so an occupied prefix can never turn an otherwise feasible merge into a
+failure.
+
+### What must hold across batches, and how conflicts are reported
+
+The merge rules out (a) equal keys under one uniqueness rule across batches
+and (b) any child-to-parent match across batches under an FK or aggregate
+rule.  A cross-batch equality can survive rewriting only when *every*
+compared position is fixed (null, integer, or a locked string): any free
+position carries a globally unique replacement.  The conflict scan therefore
+indexes only fully-fixed tuples per rule — linear in the row count, never an
+enumeration of cross-batch row pairs, which matters for a hot code repeated
+across large fixtures.  On failure the command exits non-zero, writes no file
+and leaves existing outputs untouched, reporting at least one checkable
+witness per rule with the rule id and both sides' batch ids, slot ids and the
+fixed key:
+
+```
+error: merge impossible; unresolvable cross-batch conflict(s):
+[{"rule_id": "U-settle", "fixed_key": ["X"],
+  "a": {"batch_id": "B1", "slot_id": "S01-settle", "table": "SETTLEMENT"},
+  "b": {"batch_id": "B2", "slot_id": "S01-settle", "table": "SETTLEMENT"}, ...}]
+```
+
+Everything that is not a cross-batch equality is preserved: within-batch rule
+truth including existing uniqueness collisions, missing/partial references,
+multi-parent hits and aggregate contribution attribution, plus the
+absent-vs-null distinction and every integer.  Success is never inferred from
+unchanged whole-pack rule truth or cancelling amounts.  The output is
+deterministic: swapping the input order yields a byte-equal pack.
+
+### Reading the pack
+
+A pack is organized per target table; each entry is one load row plus a
+`source` pointer (metadata, not a target column):
+
+```bash
+python3 -I examples/merge-demo/read_pack.py \
+  examples/merge-demo/merged-pack.json SETTLEMENT
+# row {"settle_code": "fg-merge-0", "settle_total": 10}  <- batch=B1 slot=S01-settle candidate=k1
+```
+
+The pack also records the domain list, the per-batch independently computed
+rule results and the full rewrite ledger, and `merge_cli verify` re-derives
+every row from the named contract candidate plus that ledger and re-runs the
+cross-batch scan on the final values.  A checked-in, reproducible walkthrough
+lives in `examples/merge-demo/` (regenerate with
+`python3 -I examples/merge-demo/build_demo.py`, including two whitelists that
+fail with witnesses and write no pack).
+
 ## Layout
 
 ```
@@ -233,10 +331,13 @@ fixturegen/contract.py     strict parsing + semantic validation
 fixturegen/engine.py       rule evaluation, component planning, search, verification
 fixturegen/material.py     impossibility material, sub-contracts, naive replayer
 fixturegen/cli.py          generator command line entry point
+fixturegen/merge.py        multi-batch merge: identity domains, rewrites, pack audit
+fixturegen/merge_cli.py    merge command line entry point (build / verify)
 fixturegen/ledger.py       transactional ledger: persistence, flow, reopen
 fixturegen/ledger_rules.py incremental per-rule truth indexes
 fixturegen/ledger_cli.py   ledger command line entry point
 examples/                  example contract, generated walkthrough, JSONL replay
+examples/merge-demo/       reproducible merge contract, batches, whitelists and pack
 tests/                     unit + independent small-enumeration tests
 ```
 
@@ -259,3 +360,12 @@ keys/amounts, cancelling aggregate amounts, idempotent and conflicting replay,
 sequence gaps, rejected lines, a simulated crash before commit, reopen with and
 without the history audit, tampered databases, and randomised multi-hundred-step
 flows including a mid-stream reopen.
+
+Merge tests (`tests/test_merge.py`, `tests/test_merge_random.py`) cover
+identity-domain construction (direct, transitive and composite-position
+links), whitelist validation, injective within-domain rewriting, locked
+values, null and absent-field handling, per-rule bounded conflict witnesses,
+determinism under input reordering, the no-trace-on-failure and atomic-write
+guarantees, CLI exit codes, and an independent naive cross-batch checker plus
+randomized differential trials that re-derive every success and every
+reported conflict without using the builder's logic.

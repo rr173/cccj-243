@@ -1,0 +1,326 @@
+{
+  "batches": [
+    {
+      "batch_id": "B1",
+      "fixture_kind": "normal",
+      "rule_results": {
+        "A-settle-amounts": true,
+        "F-detail-note": true,
+        "F-detail-report": true,
+        "F-detail-settle": true,
+        "U-note": true,
+        "U-report": true,
+        "U-settle": true
+      },
+      "target": null
+    },
+    {
+      "batch_id": "B2",
+      "fixture_kind": "normal",
+      "rule_results": {
+        "A-settle-amounts": true,
+        "F-detail-note": true,
+        "F-detail-report": true,
+        "F-detail-settle": true,
+        "U-note": true,
+        "U-report": true,
+        "U-settle": true
+      },
+      "target": null
+    }
+  ],
+  "contract_id": "merge-demo-001",
+  "domains": [
+    {
+      "columns": [
+        {
+          "field": "detail_code",
+          "table": "DETAIL"
+        },
+        {
+          "field": "report_code",
+          "table": "REPORT"
+        },
+        {
+          "field": "settle_code",
+          "table": "SETTLEMENT"
+        }
+      ],
+      "domain_id": "D01"
+    },
+    {
+      "columns": [
+        {
+          "field": "note_ref",
+          "table": "DETAIL"
+        },
+        {
+          "field": "note_code",
+          "table": "NOTE"
+        }
+      ],
+      "domain_id": "D02"
+    }
+  ],
+  "rewrites": [
+    {
+      "batch_id": "B1",
+      "domain_id": "D01",
+      "original": "X",
+      "replacement": "fg-merge-0"
+    },
+    {
+      "batch_id": "B1",
+      "domain_id": "D01",
+      "original": "Y",
+      "replacement": "fg-merge-1"
+    },
+    {
+      "batch_id": "B1",
+      "domain_id": "D02",
+      "original": "N1",
+      "replacement": "fg-merge-2"
+    },
+    {
+      "batch_id": "B1",
+      "domain_id": "D02",
+      "original": "N3",
+      "replacement": "fg-merge-3"
+    },
+    {
+      "batch_id": "B2",
+      "domain_id": "D01",
+      "original": "X",
+      "replacement": "fg-merge-4"
+    },
+    {
+      "batch_id": "B2",
+      "domain_id": "D01",
+      "original": "Y",
+      "replacement": "fg-merge-5"
+    },
+    {
+      "batch_id": "B2",
+      "domain_id": "D02",
+      "original": "N1",
+      "replacement": "fg-merge-6"
+    },
+    {
+      "batch_id": "B2",
+      "domain_id": "D02",
+      "original": "N4",
+      "replacement": "fg-merge-7"
+    }
+  ],
+  "schema": "merge-pack/1",
+  "tables": {
+    "DETAIL": [
+      {
+        "row": {
+          "amount": 10,
+          "detail_code": "fg-merge-0",
+          "note_ref": "fg-merge-2"
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S05-detail"
+        }
+      },
+      {
+        "row": {
+          "amount": 5,
+          "detail_code": "fg-merge-1",
+          "note_ref": null
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S06-detail"
+        }
+      },
+      {
+        "row": {
+          "amount": 10,
+          "detail_code": "fg-merge-4",
+          "note_ref": "fg-merge-6"
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S05-detail"
+        }
+      },
+      {
+        "row": {
+          "amount": 5,
+          "detail_code": "fg-merge-5",
+          "note_ref": null
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S06-detail"
+        }
+      }
+    ],
+    "NOTE": [
+      {
+        "row": {
+          "label": "first note",
+          "note_code": "fg-merge-2"
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S07-note"
+        }
+      },
+      {
+        "row": {
+          "note_code": "fg-merge-3"
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S08-note"
+        }
+      },
+      {
+        "row": {
+          "label": "first note",
+          "note_code": "fg-merge-6"
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S07-note"
+        }
+      },
+      {
+        "row": {
+          "note_code": "fg-merge-7"
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k2",
+          "slot_id": "S08-note"
+        }
+      }
+    ],
+    "REPORT": [
+      {
+        "row": {
+          "region": "north",
+          "report_code": "fg-merge-0"
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S03-report"
+        }
+      },
+      {
+        "row": {
+          "region": "south",
+          "report_code": "fg-merge-1"
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S04-report"
+        }
+      },
+      {
+        "row": {
+          "region": "north",
+          "report_code": "fg-merge-4"
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S03-report"
+        }
+      },
+      {
+        "row": {
+          "region": "south",
+          "report_code": "fg-merge-5"
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S04-report"
+        }
+      }
+    ],
+    "SETTLEMENT": [
+      {
+        "row": {
+          "settle_code": "fg-merge-0",
+          "settle_total": 10
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S01-settle"
+        }
+      },
+      {
+        "row": {
+          "settle_code": "fg-merge-1",
+          "settle_total": 5
+        },
+        "source": {
+          "batch_id": "B1",
+          "candidate_id": "k1",
+          "slot_id": "S02-settle"
+        }
+      },
+      {
+        "row": {
+          "settle_code": "fg-merge-4",
+          "settle_total": 10
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S01-settle"
+        }
+      },
+      {
+        "row": {
+          "settle_code": "fg-merge-5",
+          "settle_total": 5
+        },
+        "source": {
+          "batch_id": "B2",
+          "candidate_id": "k1",
+          "slot_id": "S02-settle"
+        }
+      }
+    ]
+  },
+  "whitelist": [
+    {
+      "field": "detail_code",
+      "table": "DETAIL"
+    },
+    {
+      "field": "note_ref",
+      "table": "DETAIL"
+    },
+    {
+      "field": "note_code",
+      "table": "NOTE"
+    },
+    {
+      "field": "report_code",
+      "table": "REPORT"
+    },
+    {
+      "field": "settle_code",
+      "table": "SETTLEMENT"
+    }
+  ]
+}

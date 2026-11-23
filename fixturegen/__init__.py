@@ -44,6 +44,18 @@ from .ledger import (
     open_ledger,
     parse_transaction,
 )
+from .merge import (
+    Domain,
+    MergeConflictError,
+    MergeInputError,
+    build_identity_domains,
+    load_fixture_doc,
+    load_whitelist,
+    merge_fixtures,
+    parse_whitelist,
+    verify_pack,
+    write_pack_atomic,
+)
 
 __all__ = [
     "Contract",
@@ -75,6 +87,16 @@ __all__ = [
     "load_fixture",
     "open_ledger",
     "parse_transaction",
+    "Domain",
+    "MergeConflictError",
+    "MergeInputError",
+    "build_identity_domains",
+    "load_fixture_doc",
+    "load_whitelist",
+    "merge_fixtures",
+    "parse_whitelist",
+    "verify_pack",
+    "write_pack_atomic",
 ]
 
 __version__ = "0.1.0"

@@ -1,0 +1,21 @@
+{
+  "fields": [
+    {
+      "field": "report_code",
+      "table": "REPORT"
+    },
+    {
+      "field": "detail_code",
+      "table": "DETAIL"
+    },
+    {
+      "field": "note_code",
+      "table": "NOTE"
+    },
+    {
+      "field": "note_ref",
+      "table": "DETAIL"
+    }
+  ],
+  "schema": "rewrite-whitelist/1"
+}

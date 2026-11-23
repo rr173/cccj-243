@@ -1,0 +1,73 @@
+{
+  "kind": "normal",
+  "rules": {
+    "A-settle-amounts": true,
+    "F-detail-note": true,
+    "F-detail-report": true,
+    "F-detail-settle": true,
+    "U-note": true,
+    "U-report": true,
+    "U-settle": true
+  },
+  "schema": "fixture/1",
+  "slots": {
+    "S01-settle": {
+      "candidate_id": "k1",
+      "row": {
+        "settle_code": "X",
+        "settle_total": 10
+      }
+    },
+    "S02-settle": {
+      "candidate_id": "k1",
+      "row": {
+        "settle_code": "Y",
+        "settle_total": 5
+      }
+    },
+    "S03-report": {
+      "candidate_id": "k1",
+      "row": {
+        "region": "north",
+        "report_code": "X"
+      }
+    },
+    "S04-report": {
+      "candidate_id": "k1",
+      "row": {
+        "region": "south",
+        "report_code": "Y"
+      }
+    },
+    "S05-detail": {
+      "candidate_id": "k1",
+      "row": {
+        "amount": 10,
+        "detail_code": "X",
+        "note_ref": "N1"
+      }
+    },
+    "S06-detail": {
+      "candidate_id": "k1",
+      "row": {
+        "amount": 5,
+        "detail_code": "Y",
+        "note_ref": null
+      }
+    },
+    "S07-note": {
+      "candidate_id": "k1",
+      "row": {
+        "label": "first note",
+        "note_code": "N1"
+      }
+    },
+    "S08-note": {
+      "candidate_id": "k1",
+      "row": {
+        "note_code": "N3"
+      }
+    }
+  },
+  "target": null
+}

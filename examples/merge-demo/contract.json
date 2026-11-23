@@ -1,0 +1,138 @@
+{
+  "schema": "fixture-contract/1",
+  "contract_id": "merge-demo-001",
+  "description": "Two parent tables (SETTLEMENT, REPORT) share one identity domain through the child DETAIL.code column, a second domain lives on NOTE, and an aggregate reconciles DETAIL amounts against SETTLEMENT. Every slot offers one candidate so the example stays auditable. No customer data is involved.",
+  "tables": [
+    {
+      "name": "SETTLEMENT",
+      "kind": "parent",
+      "fields": [
+        {"name": "settle_code", "type": "str", "nullable": false},
+        {"name": "settle_total", "type": "int", "nullable": false}
+      ],
+      "primary_key": ["settle_code"]
+    },
+    {
+      "name": "REPORT",
+      "kind": "parent",
+      "fields": [
+        {"name": "report_code", "type": "str", "nullable": false},
+        {"name": "region", "type": "str", "nullable": true}
+      ],
+      "primary_key": ["report_code"]
+    },
+    {
+      "name": "DETAIL",
+      "kind": "child",
+      "fields": [
+        {"name": "detail_code", "type": "str", "nullable": false},
+        {"name": "amount", "type": "int", "nullable": false},
+        {"name": "note_ref", "type": "str", "nullable": true}
+      ]
+    },
+    {
+      "name": "NOTE",
+      "kind": "parent",
+      "fields": [
+        {"name": "note_code", "type": "str", "nullable": false},
+        {"name": "label", "type": "str", "nullable": true}
+      ],
+      "primary_key": ["note_code"]
+    }
+  ],
+  "slots": [
+    {
+      "id": "S01-settle",
+      "table": "SETTLEMENT",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"settle_code": "X", "settle_total": 10}},
+        {"candidate_id": "k2", "row": {"settle_code": "Z", "settle_total": 4}}
+      ]
+    },
+    {
+      "id": "S02-settle",
+      "table": "SETTLEMENT",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"settle_code": "Y", "settle_total": 5}}
+      ]
+    },
+    {
+      "id": "S03-report",
+      "table": "REPORT",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"report_code": "X", "region": "north"}},
+        {"candidate_id": "k2", "row": {"report_code": "Z", "region": "east"}}
+      ]
+    },
+    {
+      "id": "S04-report",
+      "table": "REPORT",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"report_code": "Y", "region": "south"}}
+      ]
+    },
+    {
+      "id": "S05-detail",
+      "table": "DETAIL",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"detail_code": "X", "amount": 10, "note_ref": "N1"}},
+        {"candidate_id": "k2", "row": {"detail_code": "Z", "amount": 4, "note_ref": "N3"}}
+      ]
+    },
+    {
+      "id": "S06-detail",
+      "table": "DETAIL",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"detail_code": "Y", "amount": 5, "note_ref": null}}
+      ]
+    },
+    {
+      "id": "S07-note",
+      "table": "NOTE",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"note_code": "N1", "label": "first note"}},
+        {"candidate_id": "k2", "row": {"note_code": "N2", "label": "second note"}}
+      ]
+    },
+    {
+      "id": "S08-note",
+      "table": "NOTE",
+      "candidates": [
+        {"candidate_id": "k1", "row": {"note_code": "N3"}},
+        {"candidate_id": "k2", "row": {"note_code": "N4"}}
+      ]
+    }
+  ],
+  "rules": [
+    {"id": "U-settle", "kind": "unique", "table": "SETTLEMENT", "key": ["settle_code"]},
+    {"id": "U-report", "kind": "unique", "table": "REPORT", "key": ["report_code"]},
+    {"id": "U-note", "kind": "unique", "table": "NOTE", "key": ["note_code"]},
+    {
+      "id": "F-detail-settle",
+      "kind": "fk",
+      "child": "DETAIL", "child_fields": ["detail_code"],
+      "parent": "SETTLEMENT", "parent_key": ["settle_code"]
+    },
+    {
+      "id": "F-detail-report",
+      "kind": "fk",
+      "child": "DETAIL", "child_fields": ["detail_code"],
+      "parent": "REPORT", "parent_key": ["report_code"]
+    },
+    {
+      "id": "F-detail-note",
+      "kind": "fk",
+      "child": "DETAIL", "child_fields": ["note_ref"],
+      "parent": "NOTE", "parent_key": ["note_code"]
+    },
+    {
+      "id": "A-settle-amounts",
+      "kind": "aggregate",
+      "child": "DETAIL", "child_fields": ["detail_code"],
+      "child_amount": "amount",
+      "parent": "SETTLEMENT", "parent_key": ["settle_code"],
+      "parent_amount": "settle_total",
+      "reference_rule": "F-detail-settle"
+    }
+  ]
+}

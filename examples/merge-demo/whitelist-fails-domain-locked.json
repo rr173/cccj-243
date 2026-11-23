@@ -1,0 +1,21 @@
+{
+  "fields": [
+    {
+      "field": "settle_code",
+      "table": "SETTLEMENT"
+    },
+    {
+      "field": "report_code",
+      "table": "REPORT"
+    },
+    {
+      "field": "note_code",
+      "table": "NOTE"
+    },
+    {
+      "field": "note_ref",
+      "table": "DETAIL"
+    }
+  ],
+  "schema": "rewrite-whitelist/1"
+}
