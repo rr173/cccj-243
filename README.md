@@ -140,15 +140,104 @@ pruning.  `stats.component_product_sizes` shows the per-search product (the
 largest thing searched), never the global product — 200 unrelated slots cost
 linear work, not `5**200`.
 
+## Transaction-quality ledger
+
+`fixturegen.ledger` turns one verified normal fixture into an append-only,
+reopenable ledger of synthetic data changes.  It never reads real data: the
+only accepted values are candidate rows the contract already declares, and
+slots/contract are fixed at initialization.
+
+A JSONL transaction selects a candidate for one or more slots:
+
+```json
+{"seq": 1, "changes": [{"slot_id": "S01-client", "candidate_id": "c2"}]}
+```
+
+`seq` is a contiguous positive integer; every line must select at least one
+slot, each slot at most once, and only a candidate declared for that slot.
+Adding/removing slots or changing the contract is unsupported.  True/false is
+decided on the **whole selection after the transaction**, with the semantics of
+`evaluate_rules`; intermediate states inside a transaction are never recorded.
+A false rule is recorded, never a rejection reason.
+
+```bash
+python3 -m fixturegen.ledger_cli init \
+    --contract examples/billing.json \
+    --fixture out/billing/normal.fixture.json \
+    --db examples/ledger-demo/ledger.db
+
+python3 -m fixturegen.ledger_cli apply \
+    --contract examples/billing.json --db examples/ledger-demo/ledger.db \
+    examples/ledger-transactions.jsonl
+
+python3 -m fixturegen.ledger_cli status \
+    --contract examples/billing.json --db examples/ledger-demo/ledger.db
+
+python3 -m fixturegen.ledger_cli flow \
+    --contract examples/billing.json --db examples/ledger-demo/ledger.db
+
+# reopen and audit the whole recorded flow and digest chain
+python3 -m fixturegen.ledger_cli verify \
+    --contract examples/billing.json --db examples/ledger-demo/ledger.db
+```
+
+`status` prints the current sequence, the slot→candidate selection and each
+rule's truth.  `flow` prints, ordered by sequence, the submitted changes plus
+`newly_false` and `recovered`, both sorted by rule id.  The checked-in
+`examples/ledger-transactions.jsonl` is a small synthetic replay of six
+transactions:
+
+| seq | change | newly false | recovered |
+|-----|--------|-------------|-----------|
+| 1 | `S03-branch` → `b1` | `F-invoice-branch` | |
+| 2 | `S01-client` → `c2` | `F-invoice-client` | |
+| 3 | `S01-client` → `c1` | | `F-invoice-client` |
+| 4 | `S03-branch` → `b2` | | `F-invoice-branch` |
+| 5 | `S04-invoice` → `i2` | `A-client-billed` | |
+| 6 | `S04-invoice` → `i4` | | `A-client-billed` |
+
+Re-running `apply` on the same file reports six `skipped` transactions and
+adds no flow rows.
+
+Behaviour guarantees:
+
+* **Verified initialization.** The fixture's selected rows are re-parsed and
+  every rule is re-evaluated; a self-reported rule table that disagrees, a row
+  that is not the named candidate, or any false rule at sequence 0 is refused.
+* **Atomic per-transaction commit.** Slot updates, flow row, sequence and
+  digests share one SQLite `BEGIN IMMEDIATE`/`COMMIT`; an interrupted writer
+  leaves either the whole transaction or none of it.  Initialization builds a
+  temp database and renames it into place.
+* **Reopen checks one completed prefix.** Selection, sequence and flow must be
+  the contiguous prefix `1..seq`; the selection digest is recomputed and
+  compared, and rules are re-derived from the stored selection.  `verify`
+  additionally replays deltas and the digest chain.
+* **Idempotent re-submission.** A recorded sequence with the same slot→candidate
+  mapping is skipped without a new flow row, regardless of JSON formatting or
+  `changes` order.  A different mapping, a gap, an unknown slot/candidate, a
+  duplicate slot or an invalid value stops the batch and reports the line;
+  earlier transactions stay committed.  Resubmitting a batch whose prefix is
+  already committed continues from the first new sequence.
+* **Incremental, not rescanning.** After initialization a transaction touches
+  only the changed slots, the old/new key groups they affect and per-rule
+  aggregates (`fixturegen/ledger_rules.py`).  Unchanged children react to a
+  parent key or amount change through those indexes, and rule truth computed
+  from the indexes is cross-checked against `evaluate_rules` in the tests.
+  Reopening rebuilds the indexes from the *current* selection once; it does not
+  replay history.  Only a single writer is supported.
+
 ## Layout
 
 ```
-fixturegen/contract.py   strict parsing + semantic validation
-fixturegen/engine.py     rule evaluation, component planning, search, verification
-fixturegen/material.py   impossibility material, sub-contracts, naive replayer
-fixturegen/cli.py        command line entry point
-examples/                example contract and generated walkthrough
-tests/                   unit + independent small-enumeration tests
+fixturegen/contract.py     strict parsing + semantic validation
+fixturegen/engine.py       rule evaluation, component planning, search, verification
+fixturegen/material.py     impossibility material, sub-contracts, naive replayer
+fixturegen/cli.py          generator command line entry point
+fixturegen/ledger.py       transactional ledger: persistence, flow, reopen
+fixturegen/ledger_rules.py incremental per-rule truth indexes
+fixturegen/ledger_cli.py   ledger command line entry point
+examples/                  example contract, generated walkthrough, JSONL replay
+tests/                     unit + independent small-enumeration tests
 ```
 
 ## Tests
@@ -162,3 +251,11 @@ to cross-check normal fixtures, isolations, lexicographic tie-breaking,
 impossibility conclusions and material replay.  It also covers the two
 pedagogical cases requested: breaking one uniqueness rule without touching FK
 or aggregate rules, and a rule implied by others that cannot be isolated.
+
+Ledger tests (`tests/test_ledger.py`, `tests/test_ledger_random.py`) compare
+every incremental truth value and every flow difference against
+`evaluate_rules`; cover identity swaps, unchanged children reacting to parent
+keys/amounts, cancelling aggregate amounts, idempotent and conflicting replay,
+sequence gaps, rejected lines, a simulated crash before commit, reopen with and
+without the history audit, tampered databases, and randomised multi-hundred-step
+flows including a mid-stream reopen.
