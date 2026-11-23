@@ -1,0 +1,69 @@
+{
+  "kind": "isolated",
+  "rules": {
+    "A-client-billed": true,
+    "F-invoice-branch": false,
+    "F-invoice-client": true,
+    "U-client-id": true,
+    "U-client-region": true,
+    "U-invoice-id": true
+  },
+  "schema": "fixture/1",
+  "slots": {
+    "S01-client": {
+      "candidate_id": "c1",
+      "row": {
+        "billed_total": 30,
+        "client_id": 1,
+        "region": "north"
+      }
+    },
+    "S02-client": {
+      "candidate_id": "d1",
+      "row": {
+        "billed_total": 5,
+        "client_id": 4,
+        "region": "west"
+      }
+    },
+    "S03-branch": {
+      "candidate_id": "b1",
+      "row": {
+        "branch_id": "b-east",
+        "city": "eastville"
+      }
+    },
+    "S04-invoice": {
+      "candidate_id": "i4",
+      "row": {
+        "amount": 30,
+        "branch_ref": "b-west",
+        "client_ref": 1,
+        "invoice_id": 104
+      }
+    },
+    "S05-invoice": {
+      "candidate_id": "j1",
+      "row": {
+        "amount": 5,
+        "branch_ref": "b-east",
+        "client_ref": 4,
+        "invoice_id": 201
+      }
+    },
+    "S10-free-audit": {
+      "candidate_id": "a1",
+      "row": {
+        "audit_id": "x",
+        "message": "first"
+      }
+    },
+    "S11-free-audit": {
+      "candidate_id": "a1",
+      "row": {
+        "audit_id": "z"
+      }
+    }
+  },
+  "target": "F-invoice-branch"
+}

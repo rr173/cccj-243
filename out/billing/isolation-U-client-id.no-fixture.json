@@ -1,0 +1,359 @@
+{
+  "kind": "isolated",
+  "material": {
+    "blocks": [
+      {
+        "claim": {
+          "must_false": [
+            "U-client-id"
+          ],
+          "must_true": [
+            "A-client-billed",
+            "F-invoice-branch",
+            "F-invoice-client",
+            "U-client-region",
+            "U-invoice-id"
+          ],
+          "statement": "no selection of this block's slots satisfies every must_true rule and violates every must_false rule"
+        },
+        "id": "component:S01-client",
+        "search": {
+          "method": "depth-first over slots in slot-id order and candidates in candidate-id order; exhaustive unless the node budget was hit",
+          "product_size": 360,
+          "seat": "block information; the naive replayer ignores it",
+          "slot_count": 5
+        },
+        "sub_contract": {
+          "contract_id": "example-billing-001#component:S01-client",
+          "rules": [
+            {
+              "child": "INVOICE",
+              "child_amount": "amount",
+              "child_fields": [
+                "client_ref"
+              ],
+              "id": "A-client-billed",
+              "kind": "aggregate",
+              "parent": "CLIENT",
+              "parent_amount": "billed_total",
+              "parent_key": [
+                "client_id"
+              ],
+              "reference_rule": "F-invoice-client"
+            },
+            {
+              "child": "INVOICE",
+              "child_fields": [
+                "branch_ref"
+              ],
+              "id": "F-invoice-branch",
+              "kind": "fk",
+              "parent": "BRANCH",
+              "parent_key": [
+                "branch_id"
+              ]
+            },
+            {
+              "child": "INVOICE",
+              "child_fields": [
+                "client_ref"
+              ],
+              "id": "F-invoice-client",
+              "kind": "fk",
+              "parent": "CLIENT",
+              "parent_key": [
+                "client_id"
+              ]
+            },
+            {
+              "id": "U-client-id",
+              "key": [
+                "client_id"
+              ],
+              "kind": "unique",
+              "table": "CLIENT"
+            },
+            {
+              "id": "U-client-region",
+              "key": [
+                "region"
+              ],
+              "kind": "unique",
+              "table": "CLIENT"
+            },
+            {
+              "id": "U-invoice-id",
+              "key": [
+                "invoice_id"
+              ],
+              "kind": "unique",
+              "table": "INVOICE"
+            }
+          ],
+          "schema": "fixture-contract/1",
+          "slots": [
+            {
+              "candidates": [
+                {
+                  "candidate_id": "c1",
+                  "row": {
+                    "billed_total": 30,
+                    "client_id": 1,
+                    "region": "north"
+                  }
+                },
+                {
+                  "candidate_id": "c2",
+                  "row": {
+                    "billed_total": 0,
+                    "client_id": 2,
+                    "region": null
+                  }
+                },
+                {
+                  "candidate_id": "c3",
+                  "row": {
+                    "billed_total": 10,
+                    "client_id": 3,
+                    "region": "south"
+                  }
+                }
+              ],
+              "id": "S01-client",
+              "table": "CLIENT"
+            },
+            {
+              "candidates": [
+                {
+                  "candidate_id": "d1",
+                  "row": {
+                    "billed_total": 5,
+                    "client_id": 4,
+                    "region": "west"
+                  }
+                },
+                {
+                  "candidate_id": "d2",
+                  "row": {
+                    "billed_total": 0,
+                    "client_id": 1,
+                    "region": "east"
+                  }
+                },
+                {
+                  "candidate_id": "d3",
+                  "row": {
+                    "billed_total": 0,
+                    "client_id": 5,
+                    "region": "east"
+                  }
+                }
+              ],
+              "id": "S02-client",
+              "table": "CLIENT"
+            },
+            {
+              "candidates": [
+                {
+                  "candidate_id": "b1",
+                  "row": {
+                    "branch_id": "b-east",
+                    "city": "eastville"
+                  }
+                },
+                {
+                  "candidate_id": "b2",
+                  "row": {
+                    "branch_id": "b-west",
+                    "city": null
+                  }
+                }
+              ],
+              "id": "S03-branch",
+              "table": "BRANCH"
+            },
+            {
+              "candidates": [
+                {
+                  "candidate_id": "i1",
+                  "row": {
+                    "amount": 10,
+                    "branch_ref": "b-east",
+                    "client_ref": 1,
+                    "invoice_id": 101
+                  }
+                },
+                {
+                  "candidate_id": "i2",
+                  "row": {
+                    "amount": 20,
+                    "branch_ref": null,
+                    "client_ref": 1,
+                    "invoice_id": 102
+                  }
+                },
+                {
+                  "candidate_id": "i3",
+                  "row": {
+                    "amount": 7,
+                    "branch_ref": null,
+                    "client_ref": null,
+                    "invoice_id": 103
+                  }
+                },
+                {
+                  "candidate_id": "i4",
+                  "row": {
+                    "amount": 30,
+                    "branch_ref": "b-west",
+                    "client_ref": 1,
+                    "invoice_id": 104
+                  }
+                },
+                {
+                  "candidate_id": "i5",
+                  "row": {
+                    "amount": 1,
+                    "branch_ref": "b-east",
+                    "client_ref": 9,
+                    "invoice_id": 105
+                  }
+                }
+              ],
+              "id": "S04-invoice",
+              "table": "INVOICE"
+            },
+            {
+              "candidates": [
+                {
+                  "candidate_id": "j1",
+                  "row": {
+                    "amount": 5,
+                    "branch_ref": "b-east",
+                    "client_ref": 4,
+                    "invoice_id": 201
+                  }
+                },
+                {
+                  "candidate_id": "j2",
+                  "row": {
+                    "amount": 9,
+                    "branch_ref": "b-west",
+                    "client_ref": null,
+                    "invoice_id": 202
+                  }
+                },
+                {
+                  "candidate_id": "j3",
+                  "row": {
+                    "amount": 10,
+                    "branch_ref": "b-east",
+                    "client_ref": 3,
+                    "invoice_id": 203
+                  }
+                },
+                {
+                  "candidate_id": "j4",
+                  "row": {
+                    "amount": 0,
+                    "branch_ref": null,
+                    "client_ref": 1,
+                    "invoice_id": 204
+                  }
+                }
+              ],
+              "id": "S05-invoice",
+              "table": "INVOICE"
+            }
+          ],
+          "tables": [
+            {
+              "fields": [
+                {
+                  "name": "branch_id",
+                  "nullable": false,
+                  "type": "str"
+                },
+                {
+                  "name": "city",
+                  "nullable": true,
+                  "type": "str"
+                }
+              ],
+              "kind": "parent",
+              "name": "BRANCH",
+              "primary_key": [
+                "branch_id"
+              ]
+            },
+            {
+              "fields": [
+                {
+                  "name": "client_id",
+                  "nullable": false,
+                  "type": "int"
+                },
+                {
+                  "name": "region",
+                  "nullable": true,
+                  "type": "str"
+                },
+                {
+                  "name": "billed_total",
+                  "nullable": true,
+                  "type": "int"
+                }
+              ],
+              "kind": "parent",
+              "name": "CLIENT",
+              "primary_key": [
+                "client_id"
+              ]
+            },
+            {
+              "fields": [
+                {
+                  "name": "invoice_id",
+                  "nullable": false,
+                  "type": "int"
+                },
+                {
+                  "name": "client_ref",
+                  "nullable": true,
+                  "type": "int"
+                },
+                {
+                  "name": "branch_ref",
+                  "nullable": true,
+                  "type": "str"
+                },
+                {
+                  "name": "amount",
+                  "nullable": true,
+                  "type": "int"
+                }
+              ],
+              "kind": "child",
+              "name": "INVOICE"
+            }
+          ]
+        },
+        "tables": [
+          "BRANCH",
+          "CLIENT",
+          "INVOICE"
+        ]
+      }
+    ],
+    "conclusion": "cannot isolate U-client-id: no assignment falsifies U-client-id while the other rules in component:S01-client are true",
+    "contract_id": "example-billing-001",
+    "decomposition_lemma": "For the stated truth requirement, two slots interact only if some rule's truth can depend on both.  The generator therefore partitions slots into components (slots linked when they share a rule's influence set); a rule appears in every component whose slots can affect it, and every slot is in exactly one component or is free.  Free slots cannot change any rule, so they take any offered candidate.  Consequently the whole fixture satisfies the requirement iff every component selection satisfies the rules listed in its claim.  An unsatisfiable block therefore proves the global no-fixture conclusion for its truth requirement.  Each block contains every slot and every rule of its component, unmodified.",
+    "generated_by": "fixturegen",
+    "replay": "python3 -m fixturegen.material <this-file>",
+    "schema": "impossibility-material/1"
+  },
+  "reason": "rule 'U-client-id' cannot be falsified in isolation: it is implied by the other rules it interacts with",
+  "schema": "no-fixture/1",
+  "status": "proved",
+  "target": "U-client-id"
+}

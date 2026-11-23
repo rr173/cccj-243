@@ -1,0 +1,134 @@
+{
+  "schema": "fixture-contract/1",
+  "contract_id": "example-billing-001",
+  "description": "Two constrained parents (CLIENT summed, BRANCH reference-only) and one child (INVOICE), plus unreferenced tables whose slots are free.  Slots are deliberately independent templates; no customer data is involved.",
+  "tables": [
+    {
+      "name": "CLIENT",
+      "kind": "parent",
+      "fields": [
+        {"name": "client_id", "type": "int", "nullable": false},
+        {"name": "region", "type": "str", "nullable": true},
+        {"name": "billed_total", "type": "int", "nullable": true}
+      ],
+      "primary_key": ["client_id"]
+    },
+    {
+      "name": "BRANCH",
+      "kind": "parent",
+      "fields": [
+        {"name": "branch_id", "type": "str", "nullable": false},
+        {"name": "city", "type": "str", "nullable": true}
+      ],
+      "primary_key": ["branch_id"]
+    },
+    {
+      "name": "INVOICE",
+      "kind": "child",
+      "fields": [
+        {"name": "invoice_id", "type": "int", "nullable": false},
+        {"name": "client_ref", "type": "int", "nullable": true},
+        {"name": "branch_ref", "type": "str", "nullable": true},
+        {"name": "amount", "type": "int", "nullable": true}
+      ]
+    },
+    {
+      "name": "AUDIT_TRAIL",
+      "kind": "parent",
+      "fields": [
+        {"name": "audit_id", "type": "str", "nullable": false},
+        {"name": "message", "type": "str", "nullable": true}
+      ],
+      "primary_key": ["audit_id"]
+    }
+  ],
+  "slots": [
+    {
+      "id": "S01-client",
+      "table": "CLIENT",
+      "candidates": [
+        {"candidate_id": "c1", "row": {"client_id": 1, "region": "north", "billed_total": 30}},
+        {"candidate_id": "c2", "row": {"client_id": 2, "region": null, "billed_total": 0}},
+        {"candidate_id": "c3", "row": {"client_id": 3, "region": "south", "billed_total": 10}}
+      ]
+    },
+    {
+      "id": "S02-client",
+      "table": "CLIENT",
+      "candidates": [
+        {"candidate_id": "d1", "row": {"client_id": 4, "region": "west", "billed_total": 5}},
+        {"candidate_id": "d2", "row": {"client_id": 1, "region": "east", "billed_total": 0}},
+        {"candidate_id": "d3", "row": {"client_id": 5, "region": "east", "billed_total": 0}}
+      ]
+    },
+    {
+      "id": "S03-branch",
+      "table": "BRANCH",
+      "candidates": [
+        {"candidate_id": "b1", "row": {"branch_id": "b-east", "city": "eastville"}},
+        {"candidate_id": "b2", "row": {"branch_id": "b-west", "city": null}}
+      ]
+    },
+    {
+      "id": "S04-invoice",
+      "table": "INVOICE",
+      "candidates": [
+        {"candidate_id": "i1", "row": {"invoice_id": 101, "client_ref": 1, "branch_ref": "b-east", "amount": 10}},
+        {"candidate_id": "i2", "row": {"invoice_id": 102, "client_ref": 1, "branch_ref": null, "amount": 20}},
+        {"candidate_id": "i3", "row": {"invoice_id": 103, "client_ref": null, "branch_ref": null, "amount": 7}},
+        {"candidate_id": "i4", "row": {"invoice_id": 104, "client_ref": 1, "branch_ref": "b-west", "amount": 30}},
+        {"candidate_id": "i5", "row": {"invoice_id": 105, "client_ref": 9, "branch_ref": "b-east", "amount": 1}}
+      ]
+    },
+    {
+      "id": "S05-invoice",
+      "table": "INVOICE",
+      "candidates": [
+        {"candidate_id": "j1", "row": {"invoice_id": 201, "client_ref": 4, "branch_ref": "b-east", "amount": 5}},
+        {"candidate_id": "j2", "row": {"invoice_id": 202, "client_ref": null, "branch_ref": "b-west", "amount": 9}},
+        {"candidate_id": "j3", "row": {"invoice_id": 203, "client_ref": 3, "branch_ref": "b-east", "amount": 10}},
+        {"candidate_id": "j4", "row": {"invoice_id": 204, "client_ref": 1, "branch_ref": null, "amount": 0}}
+      ]
+    },
+    {
+      "id": "S10-free-audit",
+      "table": "AUDIT_TRAIL",
+      "candidates": [
+        {"candidate_id": "a1", "row": {"audit_id": "x", "message": "first"}},
+        {"candidate_id": "a2", "row": {"audit_id": "x", "message": "duplicate id is harmless here"}},
+        {"candidate_id": "a3", "row": {"audit_id": "y", "message": null}}
+      ]
+    },
+    {
+      "id": "S11-free-audit",
+      "table": "AUDIT_TRAIL",
+      "candidates": [
+        {"candidate_id": "a1", "row": {"audit_id": "z"}},
+        {"candidate_id": "a2", "row": {"audit_id": "z", "message": "also free"}}
+      ]
+    }
+  ],
+  "rules": [
+    {"id": "U-client-id", "kind": "unique", "table": "CLIENT", "key": ["client_id"]},
+    {"id": "U-client-region", "kind": "unique", "table": "CLIENT", "key": ["region"]},
+    {"id": "U-invoice-id", "kind": "unique", "table": "INVOICE", "key": ["invoice_id"]},
+    {
+      "id": "F-invoice-client", "kind": "fk",
+      "child": "INVOICE", "child_fields": ["client_ref"],
+      "parent": "CLIENT", "parent_key": ["client_id"]
+    },
+    {
+      "id": "F-invoice-branch", "kind": "fk",
+      "child": "INVOICE", "child_fields": ["branch_ref"],
+      "parent": "BRANCH", "parent_key": ["branch_id"]
+    },
+    {
+      "id": "A-client-billed", "kind": "aggregate",
+      "child": "INVOICE", "child_fields": ["client_ref"],
+      "child_amount": "amount",
+      "parent": "CLIENT", "parent_key": ["client_id"],
+      "parent_amount": "billed_total",
+      "reference_rule": "F-invoice-client"
+    }
+  ]
+}
