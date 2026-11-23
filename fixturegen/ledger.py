@@ -10,6 +10,21 @@ candidate the contract already declares::
 No customer data is read and no value outside the contract's candidate rows can
 enter the ledger; slots and the contract are fixed at initialization.
 
+Per-sequence digest metadata
+----------------------------
+In addition to the flow itself a ledger may carry a ``flow_digest`` table
+mapping every committed sequence to the state digest chained up to that
+point.  The table is additive metadata: ledgers created by this version have
+it from initialization and ``apply`` keeps it current, while older databases
+gain it through a one-time, idempotent :meth:`Ledger.backfill_flow_digests`
+that recomputes the chain from the recorded flow and refuses to store
+anything that disagrees with the committed state digest.  Reopening verifies
+the table (when present) with a bounded aggregate query, never a replay.
+The historical attribution index (:mod:`fixturegen.attribution`) uses this
+metadata to recognise an already-indexed transaction prefix without
+re-reading history; every ledger command behaves exactly as before whether
+or not the table exists.
+
 Per transaction the ledger records the submitted selection, the rules that
 newly became false and the rules that recovered, both lists sorted by rule id.
 Truth is decided on the *complete* selection after the whole transaction with
@@ -306,6 +321,7 @@ class Ledger:
         self.seq = 0
         self._selection_sum = 0
         self._state_digest = ""
+        self._digest_table = False
 
     # -- construction ----------------------------------------------------
     @classmethod
@@ -411,6 +427,7 @@ class Ledger:
         ledger.seq = 0
         ledger._selection_sum = selection_sum
         ledger._state_digest = state_digest
+        ledger._digest_table = True
         return ledger
 
     @classmethod
@@ -442,6 +459,21 @@ class Ledger:
         conn.execute(
             "CREATE TABLE flow(seq INTEGER PRIMARY KEY, changes TEXT NOT NULL, "
             "newly_false TEXT NOT NULL, recovered TEXT NOT NULL)")
+        Ledger._create_digest_table(conn)
+
+    @staticmethod
+    def _create_digest_table(conn: sqlite3.Connection) -> None:
+        """The additive per-sequence digest metadata (idempotent)."""
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS flow_digest("
+            "seq INTEGER PRIMARY KEY, digest TEXT NOT NULL)")
+
+    @staticmethod
+    def _has_digest_table(conn: sqlite3.Connection) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND "
+            "name='flow_digest'").fetchone()
+        return row is not None
 
     # -- meta ------------------------------------------------------------
     def _read_meta(self) -> Dict[str, str]:
@@ -508,6 +540,31 @@ class Ledger:
                 f"ledger flow is not the completed prefix 1..{stored_seq} "
                 f"(rows={count}, min={minimum}, max={maximum})")
 
+        # The optional digest metadata is derived: a ledger whose table
+        # simply lags behind (e.g. transactions written before the table
+        # existed or by a writer that does not maintain it) opens exactly
+        # as before, and the backfill extends and revalidates it.  What may
+        # not open is a table that is non-contiguous, ahead of the flow, or
+        # fully covering yet disagreeing with the committed state digest.
+        self._digest_table = self._has_digest_table(self.conn)
+        if self._digest_table:
+            dcount, dmaximum = self.conn.execute(
+                "SELECT COUNT(*), COALESCE(MAX(seq),0) "
+                "FROM flow_digest").fetchone()
+            if dcount != dmaximum or dmaximum > stored_seq:
+                raise LedgerError(
+                    f"ledger digest metadata is inconsistent with the "
+                    f"committed prefix 1..{stored_seq} (rows={dcount}, "
+                    f"max={dmaximum})")
+            if dmaximum == stored_seq and stored_seq:
+                row = self.conn.execute(
+                    "SELECT digest FROM flow_digest WHERE seq=?",
+                    (stored_seq,)).fetchone()
+                if row is None or row[0] != stored_digest:
+                    raise LedgerError(
+                        "ledger digest metadata does not commit to the "
+                        "stored state digest")
+
         selection_sum = _selection_sum(self._contract_digest, state)
         if selection_sum != stored_sum:
             raise LedgerError(
@@ -531,6 +588,7 @@ class Ledger:
             if initial_digest != meta.get("initial_digest"):
                 raise LedgerError("initial snapshot digest does not match")
             digest = initial_digest
+            chain: Dict[int, str] = {}
             flow_rows = self.conn.execute(
                 "SELECT seq, changes, newly_false, recovered FROM flow "
                 "ORDER BY seq").fetchall()
@@ -550,11 +608,21 @@ class Ledger:
                     current_ids[slot_id] = candidate_id
                 digest = _step_digest(digest, seq, _canon_changes(changes),
                                       newly_false, recovered)
+                chain[seq] = digest
             if current_ids != state:
                 raise LedgerError(
                     "stored selection is not the result of the recorded flow")
             if digest != stored_digest:
                 raise LedgerError("ledger digest chain does not match")
+            if self._digest_table:
+                # Stored rows must be a prefix of the audited chain; a table
+                # that merely lags behind is stale metadata, not corruption.
+                for seq, stored in self.conn.execute(
+                        "SELECT seq, digest FROM flow_digest"):
+                    if chain.get(seq) != stored:
+                        raise LedgerError(
+                            "ledger digest metadata disagrees with the "
+                            "audited digest chain")
 
         self.assignment = assignment
         self.tracker = RuleTracker(self.contract, assignment)
@@ -668,6 +736,10 @@ class Ledger:
                 "VALUES (?,?,?,?)",
                 (transaction.seq, _canon_json(canonical),
                  _canon_json(newly_false), _canon_json(recovered)))
+            if self._digest_table:
+                self.conn.execute(
+                    "INSERT INTO flow_digest(seq, digest) VALUES (?,?)",
+                    (transaction.seq, digest))
             self._write_meta({
                 "seq": transaction.seq,
                 "selection_sum": f"{new_sum:064x}",
@@ -728,6 +800,81 @@ class Ledger:
         self.seq = int(meta["seq"])
         self._selection_sum = int(meta["selection_sum"], 16)
         self._state_digest = meta["state_digest"]
+        self._digest_table = self._has_digest_table(self.conn)
+
+    # -- additive digest metadata ----------------------------------------
+    def backfill_flow_digests(self) -> int:
+        """Add or extend the per-sequence digest metadata; rows added.
+
+        This is the sanctioned one-time metadata upgrade for ledgers created
+        before ``flow_digest`` existed: it recomputes the digest chain from
+        the recorded flow (starting at the committed initial digest, or at
+        the last stored digest when the table is partially filled) and
+        stores one row per committed sequence.  Nothing is stored unless the
+        recomputed chain reproduces the committed state digest, and the
+        whole backfill is one atomic write.  Re-running it on an up-to-date
+        ledger adds nothing and simply re-validates the chain.
+        """
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self._create_digest_table(self.conn)
+            start = self.conn.execute(
+                "SELECT COALESCE(MAX(seq),0) FROM flow_digest").fetchone()[0]
+            initial = dict(self.conn.execute(
+                "SELECT slot_id, candidate_id FROM initial_slot"))
+            initial_digest = hashlib.sha256(
+                _canon({"contract": self._contract_digest,
+                        "initial": sorted(initial.items())})).hexdigest()
+            if initial_digest != self._read_meta().get("initial_digest"):
+                raise LedgerError(
+                    "initial snapshot does not match the committed initial "
+                    "digest")
+            if start:
+                row = self.conn.execute(
+                    "SELECT digest FROM flow_digest WHERE seq=?",
+                    (start,)).fetchone()
+                if row is None:
+                    raise LedgerError(
+                        "ledger digest metadata is not contiguous")
+                digest = row[0]
+            else:
+                digest = initial_digest
+            rows = self.conn.execute(
+                "SELECT seq, changes, newly_false, recovered FROM flow "
+                "WHERE seq>? ORDER BY seq", (start,)).fetchall()
+            added = 0
+            for seq, changes_json, false_json, recovered_json in rows:
+                if seq != start + added + 1:
+                    raise LedgerError(
+                        f"ledger flow has a sequence gap at "
+                        f"{start + added + 1} (found {seq})")
+                changes = _decode_changes(changes_json, self._slots,
+                                          self._candidates, f"flow seq {seq}")
+                newly_false = _decode_rule_list(false_json, self.contract,
+                                                f"flow seq {seq}")
+                recovered = _decode_rule_list(recovered_json, self.contract,
+                                              f"flow seq {seq}")
+                digest = _step_digest(digest, seq, _canon_changes(changes),
+                                      newly_false, recovered)
+                self.conn.execute(
+                    "INSERT INTO flow_digest(seq, digest) VALUES (?,?)",
+                    (seq, digest))
+                added += 1
+            if start + added != self.seq:
+                raise LedgerError(
+                    "ledger flow does not cover the committed sequence; "
+                    "reopen the ledger")
+            if digest != self._state_digest:
+                raise LedgerError(
+                    "recomputed digest chain does not match the committed "
+                    "state digest")
+            self.conn.execute("COMMIT")
+        except BaseException:
+            if self.conn.in_transaction:
+                self.conn.execute("ROLLBACK")
+            raise
+        self._digest_table = True
+        return added
 
     # -- JSONL -----------------------------------------------------------
     def apply_payload(self, payload: Any,

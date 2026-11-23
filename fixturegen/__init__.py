@@ -44,6 +44,15 @@ from .ledger import (
     open_ledger,
     parse_transaction,
 )
+from .attribution import (
+    AttributionError,
+    AttributionIndex,
+    answer_request,
+    build_index,
+    index_status,
+    refresh_index,
+    run_requests,
+)
 from .merge import (
     Domain,
     MergeConflictError,
@@ -87,6 +96,13 @@ __all__ = [
     "load_fixture",
     "open_ledger",
     "parse_transaction",
+    "AttributionError",
+    "AttributionIndex",
+    "answer_request",
+    "build_index",
+    "index_status",
+    "refresh_index",
+    "run_requests",
     "Domain",
     "MergeConflictError",
     "MergeInputError",

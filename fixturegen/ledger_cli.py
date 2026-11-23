@@ -70,6 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = sub.add_parser("verify", help="reopen and audit the recorded flow")
     common(verify)
+
+    backfill = sub.add_parser(
+        "backfill", help="add or extend the per-sequence digest metadata "
+                         "(one-time, additive; for ledgers created before "
+                         "flow_digest existed)")
+    common(backfill)
     return parser
 
 
@@ -104,6 +110,14 @@ def run(args: argparse.Namespace) -> int:
             with ledger:
                 _print({"ok": True, "status": ledger.status(),
                         "transactions": len(ledger.flow())})
+            return 0
+
+        if args.command == "backfill":
+            ledger = open_ledger(args.db, contract)
+            with ledger:
+                added = ledger.backfill_flow_digests()
+                _print({"ok": True, "seq": ledger.current_seq,
+                        "digests_added": added})
             return 0
 
         ledger = open_ledger(args.db, contract,

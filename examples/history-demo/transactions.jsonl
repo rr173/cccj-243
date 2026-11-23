@@ -1,0 +1,4 @@
+{"changes": [{"candidate_id": "d2", "slot_id": "S02-client"}], "seq": 1}
+{"changes": [{"candidate_id": "c2", "slot_id": "S01-client"}], "seq": 2}
+{"changes": [{"candidate_id": "i5", "slot_id": "S04-invoice"}], "seq": 3}
+{"changes": [{"candidate_id": "i4", "slot_id": "S04-invoice"}], "seq": 4}
